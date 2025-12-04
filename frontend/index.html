@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Hand Pose Visualizer</title>
-    <link rel="stylesheet" href="/assets/style.css">
+    <link rel="stylesheet" href="/assets/style.css?v=10">
     <script type="importmap">
     {
         "imports": {
@@ -22,65 +22,69 @@
             <h1>Hand Pose Tracking Visualizer</h1>
         </header>
 
-        <main class="grid-layout">
-            <!-- Main Video Component -->
-            <section class="video-section card">
+        <main class="main-layout">
+            <!-- Main Video Component (Left) -->
+            <section class="video-section card" id="video-section">
                 <div class="card-header">
                     <h2>Main Video</h2>
-                    <span class="badge live">Live</span>
+                    <div class="header-controls">
+                        <button id="play-pause-btn">Pause</button>
+                        <span class="badge live">Live</span>
+                    </div>
                 </div>
+                <!-- Status Bar -->
+                <div class="status-bar-inline">
+                    <div class="status-item">
+                        <span class="label">Status:</span>
+                        <span class="value ready" id="system-status">Ready</span>
+                    </div>
+                    <div class="status-item">
+                        <span class="label">Frame:</span>
+                        <span class="value" id="status-frame">--</span>
+                    </div>
+                </div>
+                <div class="warning-line" id="warning-line"></div>
                 <div class="video-container">
                     <img id="main-video-display" src="" alt="Video Stream">
-                    <div class="controls">
-                        <button id="play-pause-btn">Pause</button>
-                        <input type="range" id="scrubber" min="0" value="0">
-                        <span id="frame-counter">0 / 0</span>
-                    </div>
                 </div>
             </section>
 
-            <!-- Secondary Video Window -->
-            <section class="tracking-section card">
-                <div class="card-header">
-                    <h2>Reference Video</h2>
-                </div>
-                <div class="secondary-video-container">
-                    <div class="video-crop-wrapper">
-                        <video id="secondary-video" muted loop>
-                            <source src="/api/secondary-video" type="video/mp4">
-                            Your browser does not support video.
-                        </video>
-                    </div>
-                </div>
-            </section>
+            <!-- Vertical Splitter (between main video and right column) -->
+            <div class="splitter-col" id="splitter-col"></div>
 
-            <!-- 3D Diagram Window -->
-            <section class="diagram-section card">
-                <div class="card-header">
-                    <h2>3D Scene Relation</h2>
-                </div>
-                <div id="scene-3d-container" class="scene-3d-container"></div>
-            </section>
+            <!-- Right Column -->
+            <div class="right-column" id="right-column">
+                <!-- Secondary Video Window -->
+                <section class="tracking-section card" id="tracking-section">
+                    <div class="card-header">
+                        <h2>Reference Video</h2>
+                    </div>
+                    <div class="secondary-video-container">
+                        <div class="video-crop-wrapper">
+                            <video id="secondary-video" muted loop>
+                                <source src="/api/secondary-video" type="video/mp4">
+                                Your browser does not support video.
+                            </video>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Splitter -->
+                <div class="splitter-row" id="splitter-row"></div>
+
+                <!-- 3D Diagram Window -->
+                <section class="diagram-section card" id="diagram-section">
+                    <div class="card-header">
+                        <h2>3D Scene Relation</h2>
+                    </div>
+                    <div id="scene-3d-container" class="scene-3d-container"></div>
+                </section>
+            </div>
         </main>
-
-        <!-- Status Bar -->
-        <footer class="status-bar">
-            <div class="status-item">
-                <span class="label">System Status:</span>
-                <span class="value ready">Ready</span>
-            </div>
-            <div class="status-item">
-                <span class="label">FPS:</span>
-                <span class="value" id="fps-counter">--</span>
-            </div>
-            <div class="status-item">
-                <span class="label">Frame:</span>
-                <span class="value" id="status-frame">--</span>
-            </div>
-        </footer>
     </div>
-    <script src="/assets/app.js"></script>
-    <script type="module" src="/assets/scene3d.js"></script>
+    <script src="/assets/app.js?v=4"></script>
+    <script src="/assets/splitter.js?v=2"></script>
+    <script type="module" src="/assets/scene3d.js?v=3"></script>
 </body>
 
 </html>

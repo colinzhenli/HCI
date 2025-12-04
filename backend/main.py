@@ -24,9 +24,9 @@ app.add_middleware(
 )
 
 # Global configuration variables
-IMAGE_DIR = "/localhome/zla247/fs01s_cloth/capture_data/HCI_Activate-light_AprilTag_2/ldr"
-SECONDARY_VIDEO_PATH = "/localhome/zla247/Downloads/IMG_3893.mp4"
-CAPTURE_LOG_PATH = "/localhome/zla247/fs01s_cloth/capture_data/HCI_Activate_light_AprilTag/capture_log.json"
+IMAGE_DIR = "/localhome/zla247/Downloads/activate_cam_ldr_processed/ldr_processed"
+SECONDARY_VIDEO_PATH = "/localhome/zla247/Downloads/Activate_Camera.mp4"
+CAPTURE_LOG_PATH = "/localhome/zla247/fs01s_cloth/capture_data/HCI_Activate_camera_AprilTag/capture_log.json"
 
 # Camera-to-gripper transformation
 R_c2g = np.array([
@@ -79,39 +79,40 @@ def compute_poses_from_log():
         # Camera-to-base1 (world)
         c2w = cam_g2b1 @ c2g
         
-        # Light pose computation
-        # Gripper-to-base2 (position in mm, convert to meters)
-        light_g2b2 = build_4x4(
-            item['light']['rotation_matrix'],
-            [pos / 1000.0 for pos in item['light']['position']]
-        )
-        # Light-to-gripper
-        l2g = build_4x4(R_l2g, t_l2g)
-        # Light-to-base2
-        l2b2 = light_g2b2 @ l2g
-        # Transform to base1 (world) coordinate
-        l2w = base2_to_base1 @ l2b2
-        
-        # Extract positions (convert to scene units - multiply by 1000 for mm scale in scene)
+        # Extract camera position and rotation
         camera_pos = (c2w[:3, 3] * 1000).tolist()  # Back to mm for scene
-        light_pos = (l2w[:3, 3] * 1000).tolist()
-        
-        # Extract rotation matrices
         camera_rot = c2w[:3, :3].tolist()
-        light_rot = l2w[:3, :3].tolist()
-        
-        # Transform gripper positions to common world frame (base1)
-        # Camera gripper is already in base1
         camera_gripper_pos = [pos for pos in item['camera']['position']]  # Already in mm, base1 frame
-        
-        # Light gripper is in base2, transform to base1
-        light_gripper_b2 = np.array([pos / 1000.0 for pos in item['light']['position']] + [1])
-        light_gripper_b1 = base2_to_base1 @ light_gripper_b2
-        light_gripper_pos = (light_gripper_b1[:3] * 1000).tolist()  # Convert back to mm
-        
-        # Get servo angles (joint angles in degrees)
         camera_servo_angles = item['camera'].get('servo_angles', [0, 0, 0, 0, 0, 0, 0])[:6]
-        light_servo_angles = item['light'].get('servo_angles', [0, 0, 0, 0, 0, 0, 0])[:6]
+        
+        # Light pose computation (optional - may not exist in some datasets)
+        if 'light' in item:
+            # Gripper-to-base2 (position in mm, convert to meters)
+            light_g2b2 = build_4x4(
+                item['light']['rotation_matrix'],
+                [pos / 1000.0 for pos in item['light']['position']]
+            )
+            # Light-to-gripper
+            l2g = build_4x4(R_l2g, t_l2g)
+            # Light-to-base2
+            l2b2 = light_g2b2 @ l2g
+            # Transform to base1 (world) coordinate
+            l2w = base2_to_base1 @ l2b2
+            
+            light_pos = (l2w[:3, 3] * 1000).tolist()
+            light_rot = l2w[:3, :3].tolist()
+            
+            # Light gripper is in base2, transform to base1
+            light_gripper_b2 = np.array([pos / 1000.0 for pos in item['light']['position']] + [1])
+            light_gripper_b1 = base2_to_base1 @ light_gripper_b2
+            light_gripper_pos = (light_gripper_b1[:3] * 1000).tolist()
+            light_servo_angles = item['light'].get('servo_angles', [0, 0, 0, 0, 0, 0, 0])[:6]
+        else:
+            # Default light position (fixed) when no light data
+            light_pos = [0, 300, 400]
+            light_rot = [[1, 0, 0], [0, 1, 0], [0, 0, 1]]
+            light_gripper_pos = [0, 300, 400]
+            light_servo_angles = [0, 0, 0, 0, 0, 0]
         
         poses.append({
             'frame_id': frame_id,
@@ -144,13 +145,35 @@ async def read_index():
 
 @app.get("/api/images")
 def get_images():
-    """Returns a list of image filenames sorted by name."""
+    """Returns a dict of frame_id -> image filename, matched by ID in filename."""
+    import re
     # Pattern to match png files
-    pattern = os.path.join(IMAGE_DIR, "*.png")
+    pattern = os.path.join(IMAGE_DIR, "*_visualized.png")
     files = glob.glob(pattern)
-    # Extract just the filename and sort
-    filenames = sorted([os.path.basename(f) for f in files])
-    return {"images": filenames}
+    
+    # Build dict mapping frame_id to filename
+    images_dict = {}
+    for f in files:
+        filename = os.path.basename(f)
+        # Extract ID from filename like "capture-0000_visualized.png"
+        match = re.search(r'capture-(\d+)_visualized\.png', filename)
+        if match:
+            frame_id = int(match.group(1))
+            images_dict[frame_id] = filename
+    
+    # Return as sorted list based on frame IDs from capture log
+    # Get max frame ID
+    max_id = max(images_dict.keys()) if images_dict else 0
+    
+    # Build ordered list - use None for missing frames
+    images_list = []
+    for i in range(max_id + 1):
+        if i in images_dict:
+            images_list.append(images_dict[i])
+        else:
+            images_list.append(None)  # Missing frame
+    
+    return {"images": images_list, "images_dict": images_dict}
 
 @app.get("/api/secondary-video")
 async def get_secondary_video():

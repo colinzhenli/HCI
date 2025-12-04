@@ -1,10 +1,30 @@
+// ============================================
+// GLOBAL PLAYBACK CONFIGURATION
+// ============================================
+// Set the total playback time in seconds
+// Both main video (images) and reference video will be synced to this duration
+window.totalPlaybackTime = 30;  // Total playback time in seconds
+// ============================================
+
+// ============================================
+// GLOBAL WARNING CONFIGURATION
+// ============================================
+// Set the warning text and frame range here
+// The warning will be displayed when currentFrame is within [startFrame, endFrame]
+// Frame numbers are 1-based (first frame is 1, not 0)
+window.warningConfig = {
+    text: "AprilTag is near the corner, keep it within the camera view!",
+    startFrame: 38,  // Warning starts at frame 30
+    endFrame: 29     // Warning ends at frame 60
+};
+// ============================================
+
 document.addEventListener('DOMContentLoaded', () => {
     const videoDisplay = document.getElementById('main-video-display');
     const playPauseBtn = document.getElementById('play-pause-btn');
-    const scrubber = document.getElementById('scrubber');
-    const frameCounter = document.getElementById('frame-counter');
     const statusFrame = document.getElementById('status-frame');
-    const fpsCounter = document.getElementById('fps-counter');
+    const warningLine = document.getElementById('warning-line');
+    const systemStatus = document.getElementById('system-status');
     const secondaryVideo = document.getElementById('secondary-video');
 
     let images = [];
@@ -36,14 +56,23 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function calculateFPS() {
-        if (images.length > 0 && videoDuration > 0) {
-            // Calculate FPS so main video duration matches secondary video duration
-            // FPS = number_of_images / video_duration
-            targetFPS = images.length / videoDuration;
+        const totalTime = window.totalPlaybackTime || 30; // Default 30 seconds
+        
+        if (images.length > 0) {
+            // Calculate FPS based on total playback time
+            // FPS = number_of_images / totalPlaybackTime
+            targetFPS = images.length / totalTime;
             frameInterval = 1000 / targetFPS;
-            // Secondary video plays at normal speed (1x)
-            secondaryVideo.playbackRate = 1;
-            console.log('Video duration:', videoDuration, 'seconds, Images:', images.length, 'Main FPS:', targetFPS.toFixed(3), 'Frame interval:', frameInterval.toFixed(1), 'ms');
+            
+            // Adjust secondary video playback rate to match total time
+            if (videoDuration > 0) {
+                // playbackRate = videoDuration / totalPlaybackTime
+                secondaryVideo.playbackRate = videoDuration / totalTime;
+            }
+            
+            console.log('Total playback time:', totalTime, 'seconds');
+            console.log('Images:', images.length, 'Main FPS:', targetFPS.toFixed(3));
+            console.log('Video duration:', videoDuration, 'Playback rate:', secondaryVideo.playbackRate.toFixed(3));
         }
     }
 
@@ -55,13 +84,36 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    // Check if current frame is within warning range
+    function isInWarningRange(frameNumber) {
+        const config = window.warningConfig;
+        if (!config || !config.text) return false;
+        return frameNumber >= config.startFrame && frameNumber <= config.endFrame;
+    }
+
+    // Update warning display based on current frame
+    function updateWarningDisplay(frameNumber) {
+        const config = window.warningConfig;
+        
+        if (isInWarningRange(frameNumber)) {
+            // Show warning
+            warningLine.textContent = config.text;
+            systemStatus.textContent = 'Warning';
+            systemStatus.className = 'value warning';
+        } else {
+            // Clear warning
+            warningLine.textContent = '';
+            systemStatus.textContent = 'Ready';
+            systemStatus.className = 'value ready';
+        }
+    }
+
     // Fetch images from backend
     fetch('/api/images')
         .then(response => response.json())
         .then(data => {
             images = data.images;
             if (images.length > 0) {
-                scrubber.max = images.length - 1;
                 updateDisplay(0);
                 imagesLoaded = true;
                 tryStartPlayback();
@@ -74,12 +126,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
         currentIndex = index;
         const filename = images[currentIndex];
-        videoDisplay.src = `/images/${filename}`;
+        // Add cache buster to prevent loading old cached images
+        videoDisplay.src = `/images/${filename}?v=${Date.now()}`;
+
+        // Frame number is 1-based for display
+        const frameNumber = currentIndex + 1;
 
         // Update UI
-        scrubber.value = currentIndex;
-        frameCounter.textContent = `${currentIndex + 1} / ${images.length}`;
-        statusFrame.textContent = currentIndex + 1;
+        statusFrame.textContent = frameNumber;
+
+        // Update warning display
+        updateWarningDisplay(frameNumber);
 
         // Sync secondary video position
         syncSecondaryVideo();
@@ -118,7 +175,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function pausePlayback() {
         isPlaying = false;
-        playPauseBtn.textContent = 'Play';
+        playPauseBtn.textContent = 'Start';
         if (animationId) {
             cancelAnimationFrame(animationId);
         }
@@ -137,10 +194,6 @@ document.addEventListener('DOMContentLoaded', () => {
         if (elapsed > frameInterval) {
             lastFrameTime = currentTime - (elapsed % frameInterval);
 
-            // Calculate actual FPS
-            const fps = Math.round(1000 / elapsed);
-            fpsCounter.textContent = fps;
-
             let nextIndex = currentIndex + 1;
             if (nextIndex >= images.length) {
                 nextIndex = 0; // Loop
@@ -158,10 +211,5 @@ document.addEventListener('DOMContentLoaded', () => {
         } else {
             startPlayback();
         }
-    });
-
-    scrubber.addEventListener('input', (e) => {
-        pausePlayback();
-        updateDisplay(parseInt(e.target.value));
     });
 });
